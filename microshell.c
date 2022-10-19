@@ -28,9 +28,15 @@ int read_input(char *const* buff) {
     return word_count;
 }
 
+void prompt() {
+    printf("[{path}] $");
+}
+
 int main() {
     // main loop
     while (true) {
+        prompt();
+
         char **buff = malloc(max_word_count * sizeof(char*));
         for (int i = 0; i < max_word_count; i++)
             buff[i] = malloc(max_word_length * sizeof(char));
