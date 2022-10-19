@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 const int max_word_count = 1000;
 const int max_word_length = 1000; // including null terminator
@@ -28,14 +29,22 @@ int read_input(char *const* buff) {
 }
 
 int main() {
-    char **buff = malloc(max_word_count * sizeof(char*));
-    for (int i = 0; i < max_word_count; i++)
-        buff[i] = malloc(max_word_length * sizeof(char));
+    // main loop
+    while (true) {
+        char **buff = malloc(max_word_count * sizeof(char*));
+        for (int i = 0; i < max_word_count; i++)
+            buff[i] = malloc(max_word_length * sizeof(char));
 
-    int count = read_input(buff);
-    printf("%d words\n", count);
-    for (int i = 0; i < count; i++)
-        printf("%s\n", buff[i]);
+        int count = read_input(buff);
+        printf("%d words\n", count);
+        for (int i = 0; i < count; i++)
+            printf("%s\n", buff[i]);
+
+        if (strcmp(buff[0], "exit") == 0) {
+            printf("exit command read, exiting...\n");
+            return 0;
+        }
+    }
 
     return 0;
 }
