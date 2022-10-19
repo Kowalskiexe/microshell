@@ -1,17 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 const int max_word_count = 1000;
 const int max_word_length = 1000; // including null terminator
 
+// on success returns number of loaded words
 int read_input(char *const* buff) {
     int word_count = 0;
+    int idx = 0;
+    char c;
     do {
-        scanf(" %s", buff[word_count]);
-        word_count++;
-    } while (strcmp(buff[word_count - 1], ""));
-    return word_count - 1;
+        c = getchar();
+        if (isspace(c)) {
+            // mark word
+            if (idx > 0) {
+                word_count++;
+                idx = 0;
+            }
+        } else {
+            buff[word_count][idx] = c;
+            idx++;
+        }
+    } while (c != EOF && c != '\n');
+    return word_count;
 }
 
 int main() {
