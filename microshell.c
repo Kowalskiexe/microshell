@@ -75,13 +75,12 @@ int main() {
         int count = read_input(buff);
 
 
-        if (strcmp(buff[0], "exit") == 0) {
+        if (strcmp(buff[0], "exit") == 0)
             cmd_exit();
-        } else if (strcmp(buff[0], "cd") == 0) {
+        else if (strcmp(buff[0], "cd") == 0)
             cmd_cd(count, buff);
-        } else {
+        else
             execute_command(buff[0], buff, count);
-        }
 
         for (int i = 0; i < max_word_count; i++)
             free(buff[i]);
