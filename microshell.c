@@ -49,10 +49,21 @@ void prompt() {
     printf("[%s] $", path);
 }
 
-int main() {
-    //chdir("/home/inter/Downloads");
-    //chdir("..");
+void cmd_exit() {
+    printf("exit command read, exiting...\n");
+    exit(0);
+}
 
+void cmd_cd(int count, char **buff) {
+     if (count == 1)
+         printf("provide path!\n");
+     else if(count == 2)
+         chdir(buff[1]);
+     else
+         printf("too many arguments!\n");
+}
+
+int main() {
     // main loop
     while (true) {
         prompt();
@@ -65,15 +76,9 @@ int main() {
 
 
         if (strcmp(buff[0], "exit") == 0) {
-            printf("exit command read, exiting...\n");
-            return 0;
+            cmd_exit();
         } else if (strcmp(buff[0], "cd") == 0) {
-            if (count == 1)
-                printf("provide path!\n");
-            else if(count == 2)
-                chdir(buff[1]);
-            else
-                printf("too many arguments!\n");
+            cmd_cd(count, buff);
         } else {
             execute_command(buff[0], buff, count);
         }
