@@ -38,17 +38,21 @@ void execute_command(char *name, char **args, const int args_count) {
     if (id == 0) {
         args[args_count] = NULL;
         execvp(name, args);
-        printf("Error number: %d\n", errno);
+        printf("Error: %s\n", strerror(errno));
     } else {
         wait(NULL);
     }
 }
 
 void prompt() {
-    printf("[{path}] $");
+    char *path = getcwd(NULL, 0);
+    printf("[%s] $", path);
 }
 
 int main() {
+    //chdir("/home/inter/Downloads");
+    //chdir("..");
+
     // main loop
     while (true) {
         prompt();
@@ -59,11 +63,19 @@ int main() {
 
         int count = read_input(buff);
 
-        execute_command(buff[0], buff, count);
 
         if (strcmp(buff[0], "exit") == 0) {
             printf("exit command read, exiting...\n");
             return 0;
+        } else if (strcmp(buff[0], "cd") == 0) {
+            if (count == 1)
+                printf("provide path!\n");
+            else if(count == 2)
+                chdir(buff[1]);
+            else
+                printf("too many arguments!\n");
+        } else {
+            execute_command(buff[0], buff, count);
         }
 
         for (int i = 0; i < max_word_count; i++)
