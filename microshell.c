@@ -6,9 +6,48 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <termios.h>
+
+#define ESC 27
+#define ARROW_UP 65
+#define ARROW_DOWN 66
+#define ARROW_RIGHT 67
+#define ARROW_LEFT 68
+
+void print_tcflag(tcflag_t flag) {
+    for (int i = sizeof(tcflag_t) * 8 - 1; i >= 0; i--) {
+        tcflag_t mask = 1 << i;
+        printf("%d", (mask & flag) >> i);
+    }
+    printf("\n");
+}
 
 const int max_word_count = 1000;
 const int max_word_length = 1000; // including null terminator
+
+char getchar_unbuffered() {
+    // terminal config
+    struct termios config;
+    tcgetattr(STDIN_FILENO, &config);
+    struct termios old_config = config;
+
+    // VTIME - timeout
+    config.c_cc[VTIME] = 0; // don't wait
+    // VMIN - minimal number of charaters to flush
+    config.c_cc[VMIN] = 1; // flush every letter
+
+    // ICANON - canonical mode
+    // ECHO - echo input
+    config.c_lflag &= ~(ICANON | ECHO);
+
+    // ICRNL - map CR (carret return) to NL (newline)
+    config.c_iflag |= ICRNL;
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &config);
+    char c = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_config);
+    return c;
+}
 
 // on success returns number of loaded words
 int read_input(char *const *buff) {
@@ -16,7 +55,23 @@ int read_input(char *const *buff) {
     int idx = 0;
     char c;
     do {
-        c = getchar();
+        c = getchar_unbuffered();
+        //printf("(%d) \rxdxd", c);
+        if (c == ESC) {
+            getchar_unbuffered(); // consume one character
+            char c3 = getchar_unbuffered();
+            if (c3 == ARROW_UP)
+                printf("UP");
+            if (c3 == ARROW_DOWN)
+                printf("DOWN");
+            if (c3 == ARROW_RIGHT)
+                printf("RIGHT");
+            if (c3 == ARROW_LEFT)
+                printf("LEFT");
+        } else {
+            printf("%c(%d)", c, c);
+        }
+
         if (isspace(c)) {
             // mark word
             if (idx > 0) {
@@ -52,6 +107,7 @@ void prompt() {
 void cmd_exit() {
     printf("exit command read, exiting...\n");
     exit(0);
+    printf("exitted yet???\n");
 }
 
 void cmd_cd(int count, char **buff) {
