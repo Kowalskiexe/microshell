@@ -49,9 +49,14 @@ char getchar_unbuffered() {
     return c;
 }
 
-// on success returns number of loaded words
-int read_input(char *const *buff) {
-    int word_count = 0;
+void print_line(const char * const line, const int pos) {
+    printf("%s\r", line);
+    char left_side[1000];
+    strncpy(left_side, line, pos);
+    printf("%s", left_side);
+}
+
+void read_input(char *const buff) {
     int idx = 0;
     char c;
     do {
@@ -72,19 +77,29 @@ int read_input(char *const *buff) {
             printf("%c(%d)", c, c);
         }
 
-        if (isspace(c)) {
-            // mark word
+        buff[idx++] = c;
+    } while (c != EOF && c != '\n');
+    buff[idx] = '\0';
+}
+
+void parse_arguments(const char *const line, char **buff, int *word_count) {
+    *word_count = 0;
+    int idx = 0;
+    for (int i = 0; i < strlen(line); i++) {
+        if (isspace(line[i])) {
             if (idx > 0) {
-                buff[word_count][idx] = '\0';
-                word_count++;
+                buff[*word_count][idx] = '\0';
+                (*word_count)++;
                 idx = 0;
             }
         } else {
-            buff[word_count][idx] = c;
+            buff[*word_count][idx] = line[i];
             idx++;
         }
-    } while (c != EOF && c != '\n');
-    return word_count;
+    }
+    // make sure the last argument ends with a null terminator
+    buff[*word_count][idx] = '\0';
+    (*word_count)++;
 }
 
 // has side effects, adds NULL at the end of the buff
@@ -124,25 +139,27 @@ int main() {
     while (true) {
         prompt();
 
-        char **buff = malloc(max_word_count * sizeof(char*));
+        char *line = malloc(1000 * sizeof(char));
+        read_input(line);
+
+        char **args = malloc(max_word_count * sizeof(char*));
         for (int i = 0; i < max_word_count; i++)
-            buff[i] = malloc(max_word_length * sizeof(char));
+            args[i] = malloc(max_word_length * sizeof(char));
+        int count;
+        parse_arguments(line, args, &count);
 
-        int count = read_input(buff);
 
-
-        if (strcmp(buff[0], "exit") == 0)
+        if (strcmp(args[0], "exit") == 0)
             cmd_exit();
-        else if (strcmp(buff[0], "cd") == 0)
-            cmd_cd(count, buff);
+        else if (strcmp(args[0], "cd") == 0)
+            cmd_cd(count, args);
         else
-            execute_command(buff[0], buff, count);
+            execute_command(args[0], args, count);
 
         for (int i = 0; i < max_word_count; i++)
-            free(buff[i]);
-        free(buff);
+            free(args[i]);
+        free(args);
     }
-
     return 0;
 }
 
