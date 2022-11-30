@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <termios.h>
@@ -13,6 +14,8 @@
 #define ARROW_DOWN 66
 #define ARROW_RIGHT 67
 #define ARROW_LEFT 68
+#define BACKSPACE 127
+#define DELETE 51
 
 void print_tcflag(tcflag_t flag) {
     for (int i = sizeof(tcflag_t) * 8 - 1; i >= 0; i--) {
@@ -24,6 +27,12 @@ void print_tcflag(tcflag_t flag) {
 
 const int max_word_count = 1000;
 const int max_word_length = 1000; // including null terminator
+
+int get_terminal_width() {
+    struct winsize w;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+    return w.ws_col;
+}
 
 char getchar_unbuffered() {
     // terminal config
@@ -38,6 +47,7 @@ char getchar_unbuffered() {
 
     // ICANON - canonical mode
     // ECHO - echo input
+    // ECHONL - echo newline
     config.c_lflag &= ~(ICANON | ECHO | ECHONL);
 
     // ICRNL - map CR (carret return) to NL (newline)
@@ -51,6 +61,12 @@ char getchar_unbuffered() {
 
 void prompt();
 void print_line(const char * const line, const int pos) {
+    // TODO: wrap lines longer than screen size
+    // clear line
+    printf("\r");
+    int width = get_terminal_width();
+    for (int i = 0; i < width; i++)
+        printf(" ");
     printf("\r");
     prompt();
     printf("%s", line);
@@ -62,40 +78,72 @@ void print_line(const char * const line, const int pos) {
     printf("%s", left_side);
 }
 
-void read_input(char *const buff) {
-    int idx = 0;
+void insert_character_at(char c, char *str, int pos) {
+    int n = strlen(str);
+    for (int i = n; i >= pos; i--)
+        str[i] = str[i - 1];
+    str[pos] = c;
+}
+
+void remove_character_at(char *str, int pos) {
+    int n = strlen(str);
+    for (int i = pos; i < n; i++)
+        str[i] = str[i + 1];
+}
+
+void read_input(char *const buff, int buff_size) {
     char c;
     int pos = 0;
+    int length = 0;
+    memset(buff, 0, buff_size * sizeof(char));
     do {
         c = getchar_unbuffered();
-        //printf("(%d) \rxdxd", c);
-        if (c == ESC) {
-            getchar_unbuffered(); // consume one character
-            char c3 = getchar_unbuffered();
-            if (c3 == ARROW_UP)
-                printf("UP");
-            if (c3 == ARROW_DOWN)
-                printf("DOWN");
-            if (c3 == ARROW_RIGHT) {
-                //printf("RIGHT");
-                pos++; // TODO: limit going right
-            }
-            if (c3 == ARROW_LEFT) {
-                //printf("LEFT");
-                pos--; // TODO: limit going left
-            }
-        } else {
-            //printf("%c(%d)", c, c);
-            if (c != '\n') {
-                buff[idx++] = c;
-                buff[idx] = '\0';
-                pos++;
-            }
-            // add charater to buffer
+        switch (c) {
+            case ESC:
+                //printf("ESC\n");
+                getchar_unbuffered(); // consume one character
+                char c3 = getchar_unbuffered();
+                switch (c3) {
+                    case ARROW_UP:
+                        printf("UP\n");
+                          break;
+                    case ARROW_DOWN:
+                        printf("DOWN\n");
+                        break;
+                    case ARROW_RIGHT:
+                        if (pos < length)
+                            pos++;
+                        break;
+                    case ARROW_LEFT:
+                        if (pos > 0)
+                            pos--;
+                        break;
+                    case DELETE:
+                        if (pos < length && length > 0) {
+                            remove_character_at(buff, pos);
+                            length--;
+                        }
+                        getchar_unbuffered(); // consume one character
+                        break;
+                }
+                break;
+            case BACKSPACE:
+                if (length > 0) {
+                    remove_character_at(buff, pos - 1);
+                    pos--;
+                    length--;
+                }
+                break;
+            default:
+                // add charater to buffer
+                if (c != '\n') {
+                    insert_character_at(c, buff, pos++);
+                    length++;
+                }
+                break;
         }
         print_line(buff, pos);
     } while (c != EOF && c != '\n');
-    buff[idx] = '\0';
 }
 
 // returns number of arguments
@@ -156,7 +204,7 @@ int main() {
         prompt();
 
         char *line = malloc(1000 * sizeof(char));
-        read_input(line);
+        read_input(line, 1000);
         printf("\n");
 
         char **args = malloc(max_word_count * sizeof(char*));
