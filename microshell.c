@@ -38,7 +38,7 @@ char getchar_unbuffered() {
 
     // ICANON - canonical mode
     // ECHO - echo input
-    config.c_lflag &= ~(ICANON | ECHO);
+    config.c_lflag &= ~(ICANON | ECHO | ECHONL);
 
     // ICRNL - map CR (carret return) to NL (newline)
     config.c_iflag |= ICRNL;
@@ -49,16 +49,23 @@ char getchar_unbuffered() {
     return c;
 }
 
+void prompt();
 void print_line(const char * const line, const int pos) {
-    printf("%s\r", line);
+    printf("\r");
+    prompt();
+    printf("%s", line);
     char left_side[1000];
     strncpy(left_side, line, pos);
+    left_side[pos] = '\0';
+    printf("\r");
+    prompt();
     printf("%s", left_side);
 }
 
 void read_input(char *const buff) {
     int idx = 0;
     char c;
+    int pos = 0;
     do {
         c = getchar_unbuffered();
         //printf("(%d) \rxdxd", c);
@@ -69,15 +76,24 @@ void read_input(char *const buff) {
                 printf("UP");
             if (c3 == ARROW_DOWN)
                 printf("DOWN");
-            if (c3 == ARROW_RIGHT)
-                printf("RIGHT");
-            if (c3 == ARROW_LEFT)
-                printf("LEFT");
+            if (c3 == ARROW_RIGHT) {
+                //printf("RIGHT");
+                pos++; // TODO: limit going right
+            }
+            if (c3 == ARROW_LEFT) {
+                //printf("LEFT");
+                pos--; // TODO: limit going left
+            }
         } else {
-            printf("%c(%d)", c, c);
+            //printf("%c(%d)", c, c);
+            if (c != '\n') {
+                buff[idx++] = c;
+                buff[idx] = '\0';
+                pos++;
+            }
+            // add charater to buffer
         }
-
-        buff[idx++] = c;
+        print_line(buff, pos);
     } while (c != EOF && c != '\n');
     buff[idx] = '\0';
 }
@@ -99,7 +115,6 @@ void parse_arguments(const char *const line, char **buff, int *word_count) {
     }
     // make sure the last argument ends with a null terminator
     buff[*word_count][idx] = '\0';
-    (*word_count)++;
 }
 
 // has side effects, adds NULL at the end of the buff
@@ -141,6 +156,7 @@ int main() {
 
         char *line = malloc(1000 * sizeof(char));
         read_input(line);
+        printf("\n");
 
         char **args = malloc(max_word_count * sizeof(char*));
         for (int i = 0; i < max_word_count; i++)
@@ -148,14 +164,15 @@ int main() {
         int count;
         parse_arguments(line, args, &count);
 
-
         if (strcmp(args[0], "exit") == 0)
             cmd_exit();
         else if (strcmp(args[0], "cd") == 0)
             cmd_cd(count, args);
         else
-            execute_command(args[0], args, count);
+            //execute_command(args[0], args, count);
+            ;
 
+        free(line);
         for (int i = 0; i < max_word_count; i++)
             free(args[i]);
         free(args);
