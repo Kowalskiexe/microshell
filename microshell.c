@@ -172,7 +172,7 @@ void execute_command(char *name, char **args, const int args_count) {
     if (id == 0) {
         args[args_count] = NULL;
         execvp(name, args);
-        printf("Error: %s\n", strerror(errno));
+        perror("Error");
         exit(EXIT_FAILURE);
     } else {
         wait(NULL);
