@@ -98,23 +98,24 @@ void read_input(char *const buff) {
     buff[idx] = '\0';
 }
 
-void parse_arguments(const char *const line, char **buff, int *word_count) {
-    *word_count = 0;
+// returns number of arguments
+int parse_arguments(const char *const line, char **buff) {
+    int top = 0;
     int idx = 0;
     for (int i = 0; i < strlen(line); i++) {
         if (isspace(line[i])) {
             if (idx > 0) {
-                buff[*word_count][idx] = '\0';
-                (*word_count)++;
+                buff[top++][idx] = '\0';
                 idx = 0;
             }
         } else {
-            buff[*word_count][idx] = line[i];
+            buff[top][idx] = line[i];
             idx++;
         }
     }
     // make sure the last argument ends with a null terminator
-    buff[*word_count][idx] = '\0';
+    buff[top][idx] = '\0';
+    return top + 1;
 }
 
 // has side effects, adds NULL at the end of the buff
@@ -161,16 +162,14 @@ int main() {
         char **args = malloc(max_word_count * sizeof(char*));
         for (int i = 0; i < max_word_count; i++)
             args[i] = malloc(max_word_length * sizeof(char));
-        int count;
-        parse_arguments(line, args, &count);
+        int count = parse_arguments(line, args);
 
         if (strcmp(args[0], "exit") == 0)
             cmd_exit();
         else if (strcmp(args[0], "cd") == 0)
             cmd_cd(count, args);
         else
-            //execute_command(args[0], args, count);
-            ;
+            execute_command(args[0], args, count);
 
         free(line);
         for (int i = 0; i < max_word_count; i++)
