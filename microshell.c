@@ -59,23 +59,68 @@ char getchar_unbuffered() {
     return c;
 }
 
-void prompt();
-void print_line(const char * const line, const int pos) {
-    // TODO: wrap lines longer than screen size
-    // clear line
-    printf("\r");
+void move_cursor_by(int x, int y) {
+    // escape codes with 0 still move cursor by one
+    if (x != 0) {
+        if (x > 0)
+            printf("\e[%dC", x); // move cursor right
+        else
+            printf("\e[%dD", -x); // move curosr left
+    }
+    if (y != 0) {
+        if (y > 0)
+            printf("\e[%dB", y); // move cursor down
+        else
+            printf("\e[%dA", -y); // move cursor up
+    }
+}
+
+char * get_prompt();
+// FIXME: ARBITRALNE PORUSZANIE KURSOREM JEST BARDZO TRUDNE
+void print_buffer(const char * const buffer, const int old_buffer_length, int pos) {
+    // clear
+    char *prompt = get_prompt();
+    int old_total_length = strlen(prompt) + old_buffer_length;
     int width = get_terminal_width();
-    for (int i = 0; i < width; i++)
-        printf(" ");
-    printf("\r");
-    prompt();
-    printf("%s", line);
-    char left_side[1000];
-    strncpy(left_side, line, pos);
-    left_side[pos] = '\0';
-    printf("\r");
-    prompt();
-    printf("%s", left_side);
+
+    int old_x = (old_total_length - 1) % width + 1; // counting from 1
+    int old_y = (old_total_length  - 1) / width + 1; // counting from 1
+
+    pos += strlen(prompt);
+    // target cursor position
+    int cursor_x = (pos - 1) % width + 1; // counting from 1
+    int cursor_y = (pos - 1) / width + 1; // counting from 1
+
+    int diff_x = old_x - cursor_x + 1;
+    int diff_y = old_y - cursor_y;
+    move_cursor_by(-cursor_x, diff_y);
+    fflush(stdout);
+
+   for (int i = 0; i < old_y; i++) {
+        printf("\e[2K"); // erase line (cursor position does not change)
+        fflush(stdout);
+        printf("\e[1A"); // move cursor up
+        fflush(stdout);
+    }
+    printf("\e[1B"); // move cursor down
+    fflush(stdout);
+    //printf("\e[%dD", old_x); // move cursor left (to the edge of the screen)
+    //fflush(stdout);
+
+    // redraw
+    printf("%s", prompt);
+    fflush(stdout);
+    printf("%s", buffer);
+    fflush(stdout);
+
+    // move cursor to the correct position
+    int total_length = strlen(prompt) + strlen(buffer);
+    // assuming cursor is at the end of the buffer
+    int current_x = (total_length - 1) % width + 1; // counting from 1
+    int current_y = (total_length  - 1) / width + 1; // counting from 1
+    int x_diff = cursor_x - current_x;
+    int y_diff = cursor_y - current_y;
+    move_cursor_by(x_diff, y_diff);
 }
 
 void insert_character_at(char c, char *str, int pos) {
@@ -92,31 +137,38 @@ void remove_character_at(char *str, int pos) {
 }
 
 void read_input(char *const buff, int buff_size) {
+    get_prompt();
     char c;
     int pos = 0;
     int length = 0;
+    int old_length = 0;
     memset(buff, 0, buff_size * sizeof(char));
+    print_buffer(buff, old_length, pos);
     do {
         c = getchar_unbuffered();
         switch (c) {
             case ESC:
-                //printf("ESC\n");
+                //printf("ESC");
                 getchar_unbuffered(); // consume one character
                 char c3 = getchar_unbuffered();
                 switch (c3) {
                     case ARROW_UP:
-                        printf("UP\n");
-                          break;
+                        //printf("UP");
+                        break;
                     case ARROW_DOWN:
-                        printf("DOWN\n");
+                        //printf("DOWN");
                         break;
                     case ARROW_RIGHT:
-                        if (pos < length)
+                        if (pos < length) {
+                            //printf("\e[1C");
                             pos++;
+                        }
                         break;
                     case ARROW_LEFT:
-                        if (pos > 0)
+                        if (pos > 0) {
+                            //printf("\e[1D");
                             pos--;
+                        }
                         break;
                     case DELETE:
                         if (pos < length && length > 0) {
@@ -136,13 +188,16 @@ void read_input(char *const buff, int buff_size) {
                 break;
             default:
                 // add charater to buffer
+                // TODO: add only printable characters ??
                 if (c != '\n') {
                     insert_character_at(c, buff, pos++);
                     length++;
+                    //printf("%c", c);
                 }
                 break;
         }
-        print_line(buff, pos);
+        print_buffer(buff, old_length, pos);
+        old_length = length;
     } while (c != EOF && c != '\n');
 }
 
@@ -179,9 +234,14 @@ void execute_command(char *name, char **args, const int args_count) {
     }
 }
 
-void prompt() {
+// returns prompt's content
+char *get_prompt() {
     char *path = getcwd(NULL, 0);
-    printf("[%s] $", path);
+    //printf("[%s] $", path);
+    char *out = malloc(1000 * sizeof(char));
+    sprintf(out, "[%s] $", path);
+    //printf("%s", out);
+    return out;
 }
 
 void cmd_exit() {
@@ -202,7 +262,7 @@ void cmd_cd(int count, char **buff) {
 int main() {
     // main loop
     while (true) {
-        prompt();
+        //get_prompt();
 
         char *line = malloc(1000 * sizeof(char));
         read_input(line, 1000);
