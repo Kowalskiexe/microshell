@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <termios.h>
+#include <locale.h>
 
 #define ESC 27
 #define ARROW_UP 65
@@ -266,8 +267,7 @@ void read_input(char * const buff, const int buff_size) {
                 break;
             default:
                 // add charater to buffer
-                // TODO: add only printable characters ??
-                if (c != '\n') {
+                if (isprint(c)) {
                     insert_character_at(c, buff, pos++);
                     length++;
                 }
@@ -338,6 +338,7 @@ void cmd_cd(int count, char **buff) {
 }
 
 int main() {
+    setlocale(LC_ALL, "pl_PL.utf8");
     // main loop
     while (true) {
         //get_prompt();
