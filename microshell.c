@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,14 @@
 #define BACKSPACE 127
 #define DELETE 51
 
+#define FLUSH 0
+#if FLUSH == 1
+#define fflush(stdout); fflush(stdout);
+#else
+#define fflush(stdout);
+#endif
+
+
 void print_tcflag(tcflag_t flag) {
     for (int i = sizeof(tcflag_t) * 8 - 1; i >= 0; i--) {
         tcflag_t mask = 1 << i;
@@ -32,6 +41,128 @@ int get_terminal_width() {
     struct winsize w;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
     return w.ws_col;
+}
+
+bool _cursor_control = false;
+int _x = 0, _y = 0;
+char _old_buffer[100000] = {'\0'};
+void init_cursor_control() {
+    _cursor_control = true;
+    _x = 0; _y = 0;
+}
+
+void end_cursor_control() {
+    _cursor_control = false;
+    _old_buffer[0] = '\0';
+}
+
+// adjusts x and y as if buff's contents were printed
+void buff_shift(const char * const buff, int *x, int *y) {
+    //*x = 0, *y = 0;
+    int width = get_terminal_width();
+    for (int i = 0; i < strlen(buff); i++) {
+        if (buff[i] == '\n') {
+            *x = 0;
+            (*y)++;
+        } else {
+            (*x)++;
+            if (*x == width) {
+                *x = 0;
+                (*y)++;
+            }
+        }
+    }
+}
+
+
+void ccprintf(const char *const format, ...) {
+    if (!_cursor_control) {
+        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        return;
+    }
+    va_list args;
+    va_start(args, format);
+    char buff[100000];
+    vsprintf(buff, format, args);
+    va_end(args);
+    // printf("%s", buff);
+    int width = get_terminal_width();
+    for (int i = 0; i < strlen(buff); i++) {
+        printf("%c", buff[i]);
+        fflush(stdout);
+        if (_x == width - 1) {
+            printf("\n");
+            fflush(stdout);
+            _x = 0;
+            _y++;
+        }
+        else
+            _x++;
+    }
+
+
+    //buff_shift(buff, &_x, &_y);!!!!!
+
+    /*
+    // calculate shift in cursor's position
+    int width = get_terminal_width();
+    for (int i = 0; i < strlen(buff); i++) {
+        if (buff[i] == '\n') {
+            _x = 0;
+            _y++;
+        } else {
+            _x++;
+            if (_x == width) {
+                _x = 0;
+                _y++;
+            }
+        }
+    }
+    */
+}
+
+// moves cursor on screen
+void ccmove_cursor(int dx, int dy) {
+    if (!_cursor_control) {
+        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        return;
+    }
+    // escape codes with 0 still move cursor by one
+    if (dx != 0) {
+        if (dx > 0)
+            printf("\e[%dC", dx); // move cursor right
+        else
+            printf("\e[%dD", -dx); // move curosr left
+    }
+    if (dy != 0) {
+        if (dy > 0)
+            printf("\e[%dB", dy); // move cursor down
+        else
+            printf("\e[%dA", -dy); // move cursor up
+    }
+    _x += dx;
+    _y += dy;
+}
+
+int ccget_x() {
+    if (!_cursor_control) {
+        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        return 0;
+    }
+    return _x;
+}
+
+int ccget_y() {
+    if (!_cursor_control) {
+        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        return 0;
+    }
+    return _y;
+}
+
+// move cursor to 0, 0 (0, 0 is set by calling init_cursor_control())
+void ccreset_cursor() {
+    ccmove_cursor(-ccget_x(), -ccget_y());
 }
 
 char getchar_unbuffered() {
@@ -59,6 +190,7 @@ char getchar_unbuffered() {
     return c;
 }
 
+/* marked for deletion
 void move_cursor_by(int x, int y) {
     // escape codes with 0 still move cursor by one
     if (x != 0) {
@@ -74,53 +206,44 @@ void move_cursor_by(int x, int y) {
             printf("\e[%dA", -y); // move cursor up
     }
 }
+*/
 
 char * get_prompt();
-// FIXME: ARBITRALNE PORUSZANIE KURSOREM JEST BARDZO TRUDNE
-void print_buffer(const char * const buffer, const int old_buffer_length, int pos) {
+void print_buffer(const char * const user_buffer, int pos) {
     // clear
     char *prompt = get_prompt();
-    int old_total_length = strlen(prompt) + old_buffer_length;
-    int width = get_terminal_width();
-
-    int old_x = (old_total_length - 1) % width + 1; // counting from 1
-    int old_y = (old_total_length  - 1) / width + 1; // counting from 1
-
-    pos += strlen(prompt);
-    // target cursor position
-    int cursor_x = (pos - 1) % width + 1; // counting from 1
-    int cursor_y = (pos - 1) / width + 1; // counting from 1
-
-    int diff_x = old_x - cursor_x + 1;
-    int diff_y = old_y - cursor_y;
-    move_cursor_by(-cursor_x, diff_y);
+    ccreset_cursor();
     fflush(stdout);
+    int old_x = 0, old_y = 0;
+    buff_shift(_old_buffer, &old_x, &old_y);
 
-   for (int i = 0; i < old_y; i++) {
+    for (int i = 0; i <= old_y; i++) {
         printf("\e[2K"); // erase line (cursor position does not change)
         fflush(stdout);
-        printf("\e[1A"); // move cursor up
-        fflush(stdout);
+        // if this isn't the last line
+        if (i < old_y) {
+            ccmove_cursor(0, 1); // move cursor down
+            fflush(stdout);
+        }
     }
-    printf("\e[1B"); // move cursor down
     fflush(stdout);
-    //printf("\e[%dD", old_x); // move cursor left (to the edge of the screen)
-    //fflush(stdout);
+    ccreset_cursor();
+    fflush(stdout);
 
     // redraw
-    printf("%s", prompt);
+    ccprintf("%s", prompt);
     fflush(stdout);
-    printf("%s", buffer);
+    ccprintf("%s", user_buffer);
     fflush(stdout);
+    sprintf(_old_buffer, "%s%s", prompt, user_buffer);
 
     // move cursor to the correct position
-    int total_length = strlen(prompt) + strlen(buffer);
-    // assuming cursor is at the end of the buffer
-    int current_x = (total_length - 1) % width + 1; // counting from 1
-    int current_y = (total_length  - 1) / width + 1; // counting from 1
-    int x_diff = cursor_x - current_x;
-    int y_diff = cursor_y - current_y;
-    move_cursor_by(x_diff, y_diff);
+    int width = get_terminal_width();
+    pos += strlen(prompt);
+    int x = pos % width;
+    int y = pos / width;
+    ccreset_cursor();
+    ccmove_cursor(x, y);
 }
 
 void insert_character_at(char c, char *str, int pos) {
@@ -136,14 +259,16 @@ void remove_character_at(char *str, int pos) {
         str[i] = str[i + 1];
 }
 
-void read_input(char *const buff, int buff_size) {
-    get_prompt();
+void read_input(char * const buff, const int buff_size) {
     char c;
     int pos = 0;
     int length = 0;
     int old_length = 0;
+    char old_buff[buff_size];
     memset(buff, 0, buff_size * sizeof(char));
-    print_buffer(buff, old_length, pos);
+    memset(old_buff, 0, buff_size * sizeof(char));
+    init_cursor_control();
+    print_buffer(buff, pos);
     do {
         c = getchar_unbuffered();
         switch (c) {
@@ -172,6 +297,7 @@ void read_input(char *const buff, int buff_size) {
                         break;
                     case DELETE:
                         if (pos < length && length > 0) {
+                            memcpy(old_buff, buff, buff_size);
                             remove_character_at(buff, pos);
                             length--;
                         }
@@ -181,6 +307,7 @@ void read_input(char *const buff, int buff_size) {
                 break;
             case BACKSPACE:
                 if (length > 0) {
+                    memcpy(old_buff, buff, buff_size);
                     remove_character_at(buff, pos - 1);
                     pos--;
                     length--;
@@ -190,15 +317,20 @@ void read_input(char *const buff, int buff_size) {
                 // add charater to buffer
                 // TODO: add only printable characters ??
                 if (c != '\n') {
+                    memcpy(old_buff, buff, buff_size);
                     insert_character_at(c, buff, pos++);
                     length++;
                     //printf("%c", c);
                 }
                 break;
         }
-        print_buffer(buff, old_length, pos);
+        print_buffer(buff, pos);
         old_length = length;
     } while (c != EOF && c != '\n');
+    // move cursor to the end
+    print_buffer(buff, length);
+    fflush(stdout);
+    end_cursor_control();
 }
 
 // returns number of arguments
@@ -260,6 +392,20 @@ void cmd_cd(int count, char **buff) {
 }
 
 int main() {
+#if DEBUG_CURSOR_CONTROL
+    init_cursor_control();
+    ccprintf("%s %s\n", "hi", "mom");
+    ccprintf("%d %d\n", ccget_x(), ccget_y());
+    ccprintf("top text\n");
+    ccmove_cursor(1, -1);
+    ccprintf("bottom text|"); // should result in tbottom text|
+    ccprintf("%d %d\n", ccget_x(), ccget_y()); // should result in 13 2
+    ccprintf("longtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtext|");
+    ccprintf("%d %d\n", ccget_x(), ccget_y());
+    end_cursor_control();
+#endif
+    printf("terminal width: %d\n", get_terminal_width());
+    fflush(stdout);
     // main loop
     while (true) {
         //get_prompt();
