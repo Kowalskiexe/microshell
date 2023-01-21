@@ -58,7 +58,6 @@ void end_cursor_control() {
 
 // adjusts x and y as if buff's contents were printed
 void buff_shift(const char * const buff, int *x, int *y) {
-    //*x = 0, *y = 0;
     int width = get_terminal_width();
     for (int i = 0; i < strlen(buff); i++) {
         if (buff[i] == '\n') {
@@ -85,7 +84,6 @@ void ccprintf(const char *const format, ...) {
     char buff[100000];
     vsprintf(buff, format, args);
     va_end(args);
-    // printf("%s", buff);
     int width = get_terminal_width();
     for (int i = 0; i < strlen(buff); i++) {
         printf("%c", buff[i]);
@@ -99,26 +97,6 @@ void ccprintf(const char *const format, ...) {
         else
             _x++;
     }
-
-
-    //buff_shift(buff, &_x, &_y);!!!!!
-
-    /*
-    // calculate shift in cursor's position
-    int width = get_terminal_width();
-    for (int i = 0; i < strlen(buff); i++) {
-        if (buff[i] == '\n') {
-            _x = 0;
-            _y++;
-        } else {
-            _x++;
-            if (_x == width) {
-                _x = 0;
-                _y++;
-            }
-        }
-    }
-    */
 }
 
 // moves cursor on screen
@@ -190,23 +168,6 @@ char getchar_unbuffered() {
     return c;
 }
 
-/* marked for deletion
-void move_cursor_by(int x, int y) {
-    // escape codes with 0 still move cursor by one
-    if (x != 0) {
-        if (x > 0)
-            printf("\e[%dC", x); // move cursor right
-        else
-            printf("\e[%dD", -x); // move curosr left
-    }
-    if (y != 0) {
-        if (y > 0)
-            printf("\e[%dB", y); // move cursor down
-        else
-            printf("\e[%dA", -y); // move cursor up
-    }
-}
-*/
 
 char * get_prompt();
 void print_buffer(const char * const user_buffer, int pos) {
@@ -263,17 +224,13 @@ void read_input(char * const buff, const int buff_size) {
     char c;
     int pos = 0;
     int length = 0;
-    int old_length = 0;
-    char old_buff[buff_size];
     memset(buff, 0, buff_size * sizeof(char));
-    memset(old_buff, 0, buff_size * sizeof(char));
     init_cursor_control();
     print_buffer(buff, pos);
     do {
         c = getchar_unbuffered();
         switch (c) {
             case ESC:
-                //printf("ESC");
                 getchar_unbuffered(); // consume one character
                 char c3 = getchar_unbuffered();
                 switch (c3) {
@@ -284,20 +241,15 @@ void read_input(char * const buff, const int buff_size) {
                         //printf("DOWN");
                         break;
                     case ARROW_RIGHT:
-                        if (pos < length) {
-                            //printf("\e[1C");
+                        if (pos < length)
                             pos++;
-                        }
                         break;
                     case ARROW_LEFT:
-                        if (pos > 0) {
-                            //printf("\e[1D");
+                        if (pos > 0)
                             pos--;
-                        }
                         break;
                     case DELETE:
                         if (pos < length && length > 0) {
-                            memcpy(old_buff, buff, buff_size);
                             remove_character_at(buff, pos);
                             length--;
                         }
@@ -307,7 +259,6 @@ void read_input(char * const buff, const int buff_size) {
                 break;
             case BACKSPACE:
                 if (length > 0) {
-                    memcpy(old_buff, buff, buff_size);
                     remove_character_at(buff, pos - 1);
                     pos--;
                     length--;
@@ -317,15 +268,12 @@ void read_input(char * const buff, const int buff_size) {
                 // add charater to buffer
                 // TODO: add only printable characters ??
                 if (c != '\n') {
-                    memcpy(old_buff, buff, buff_size);
                     insert_character_at(c, buff, pos++);
                     length++;
-                    //printf("%c", c);
                 }
                 break;
         }
         print_buffer(buff, pos);
-        old_length = length;
     } while (c != EOF && c != '\n');
     // move cursor to the end
     print_buffer(buff, length);
@@ -369,10 +317,8 @@ void execute_command(char *name, char **args, const int args_count) {
 // returns prompt's content
 char *get_prompt() {
     char *path = getcwd(NULL, 0);
-    //printf("[%s] $", path);
     char *out = malloc(1000 * sizeof(char));
     sprintf(out, "[%s] $", path);
-    //printf("%s", out);
     return out;
 }
 
@@ -392,20 +338,6 @@ void cmd_cd(int count, char **buff) {
 }
 
 int main() {
-#if DEBUG_CURSOR_CONTROL
-    init_cursor_control();
-    ccprintf("%s %s\n", "hi", "mom");
-    ccprintf("%d %d\n", ccget_x(), ccget_y());
-    ccprintf("top text\n");
-    ccmove_cursor(1, -1);
-    ccprintf("bottom text|"); // should result in tbottom text|
-    ccprintf("%d %d\n", ccget_x(), ccget_y()); // should result in 13 2
-    ccprintf("longtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtextlongtext|");
-    ccprintf("%d %d\n", ccget_x(), ccget_y());
-    end_cursor_control();
-#endif
-    printf("terminal width: %d\n", get_terminal_width());
-    fflush(stdout);
     // main loop
     while (true) {
         //get_prompt();
