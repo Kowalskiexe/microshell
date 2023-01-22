@@ -1,5 +1,7 @@
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -7,9 +9,11 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <termios.h>
 #include <locale.h>
+#include <math.h>
 
 #define ESC 27
 #define ARROW_UP 65
@@ -43,6 +47,10 @@ int get_terminal_width() {
     struct winsize w;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
     return w.ws_col;
+}
+
+int max(int a, int b) {
+    return a > b ? a : b;
 }
 
 bool _cursor_control = false;
@@ -297,7 +305,7 @@ int parse_arguments(const char *const line, char **buff) {
         } else {
             if (line[i] == '\'' || line[i] == '\"') {
                 if (opening_quote == no_quote) {
-                        opening_quote = line[i];
+                    opening_quote = line[i];
                 } else {
                     if (opening_quote == line[i])
                         opening_quote = no_quote;
@@ -306,9 +314,11 @@ int parse_arguments(const char *const line, char **buff) {
                 buff[top][idx++] = line[i];
         }
     }
-    // make sure the last argument ends with a null terminator
-    buff[top][idx] = '\0';
-    return top + 1;
+    if (idx > 0) {
+        buff[top++][idx] = '\0';
+    }
+    buff[top] = NULL;
+    return top;
 }
 
 // has side effects, adds NULL at the end of the buff
@@ -333,22 +343,555 @@ char *get_prompt() {
 }
 
 void cmd_exit() {
-    printf("exit command read, exiting...\n");
+    printf("bye!\n");
     exit(0);
-    printf("exitted yet???\n");
 }
 
-void cmd_cd(int count, char **buff) {
-     if (count == 1)
-         printf("provide path!\n");
-     else if(count == 2)
-         chdir(buff[1]);
-     else
-         printf("too many arguments!\n");
+char last_cd_location[1000] = {'\0'};
+void cmd_cd(int argc, char **argv) {
+    if (argc > 2) {
+        fprintf(stderr, "too many arguments!\n");
+        return;
+    }
+    char target_location[1000];
+
+    if (argc == 1)
+        strcpy(target_location, getenv("HOME"));
+    else {
+        if (strcmp(argv[1], "-") == 0) {
+            if (last_cd_location[0] == '\0')
+                return;
+            strcpy(target_location, last_cd_location);
+        } else if (strcmp(argv[1], "~") == 0)
+            strcpy(target_location, getenv("HOME"));
+        else
+            strcpy(target_location, argv[1]);
+    }
+    strcpy(last_cd_location, getcwd(NULL, 0));
+    int ret = chdir(target_location);
+    if (ret == -1)
+        fprintf(stderr, "cd: The directory \"%s\" does not exist\n", target_location);
+}
+
+void cmd_type(int argc, char **argv) {
+    if (argc == 1) {
+        fprintf(stderr, "name a command!\n");
+        return;
+    }
+    if (argc > 2) {
+        fprintf(stderr, "too many arguments!\n");
+        return;
+    }
+    // argc == 2
+    bool builtin = false;
+    builtin |= strcmp(argv[1], "exit") == 0;
+    builtin |= strcmp(argv[1], "cd") == 0;
+    builtin |= strcmp(argv[1], "type") == 0;
+    builtin |= strcmp(argv[1], "args") == 0;
+    if (builtin)
+        printf("builtin\n");
+    else
+        printf("external\n"); // TODO: detect programs (?)
+}
+
+// for testing parsing
+void cmd_args(int argc, char **argv) {
+    printf("%d args:\n", argc);
+    for (int i = 0; i < argc; i++)
+        printf("%s\n", argv[i]);
+}
+
+void cmd_help() {
+    printf("microshell by Maciej Kowalski (481828), avaible commands:\n");
+    printf("  help - see this list of avaible commands\n");
+    printf("  exit - exit microshell\n");
+    printf("  type - see if command is external or a bulitin\n");
+    printf("  calc - evaluate an arithmetic expression (dodatkowa komenda powłoki #1)\n");
+    printf("    cd - change working directory\n");
+    printf("    ps - list running processes (dodatkowa komenda powłoki #2)\n");
+}
+
+bool is_numeric(char *str) {
+    for (int i = 0; i < strlen(str); i++) {
+        if (!isdigit(str[i]))
+            return false;
+    }
+    return true;
+}
+
+void extract(const char * const content, const char * const field, char * outbuff) {
+    char *start = strstr(content, field);
+    if (start == NULL) {
+        fprintf(stderr, "error 1\n");
+        exit(1);
+    }
+    start += strlen(field);
+    char *end = strstr(start, "\n") - 1;
+    if (end == NULL) {
+        fprintf(stderr, "error 2\n");
+        exit(2);
+    }
+    int length = end - start + 1;
+    memcpy(outbuff, start, length * sizeof(char));
+    outbuff[length] = '\0';
+}
+
+// TODO: ranme to process table and add coloring
+struct Table4 {
+    int length;
+    char ***content;
+};
+
+void init_table4(struct Table4 *tab) {
+    tab->length = 0;
+    tab->content = malloc(4 * sizeof(char **));
+    for (int i = 0; i < 4; i++) {
+        tab->content[i] = malloc(1000 * sizeof(char *));
+        for (int j = 0; j < 1000; j++)
+            tab->content[i][j] = malloc(200 * sizeof(char));
+    }
+}
+
+void append_table4(struct Table4 *tab, char *col0, char *col1, char *col2, char *col3) {
+    strcpy(tab->content[0][tab->length], col0);
+    strcpy(tab->content[1][tab->length], col1);
+    strcpy(tab->content[2][tab->length], col2);
+    strcpy(tab->content[3][tab->length], col3);
+    tab->length++;
+}
+
+int longest_len(char *column[], int n) {
+    int out = 0;
+    for (int i = 0; i < n; i++) {
+        int len = strlen(column[i]);
+        if (len > out)
+            out = len;
+    }
+    return out;
+}
+
+void print_table4(struct Table4 *tab) {
+    int col_w0 = longest_len(tab->content[0], tab->length);
+    int col_w1 = longest_len(tab->content[1], tab->length);
+    int col_w2 = longest_len(tab->content[2], tab->length);
+    int col_w3 = longest_len(tab->content[3], tab->length);
+    char format[1000];
+    sprintf(format, "%%%ds  %%%ds  %%-%ds  %%-%ds\n", col_w0, col_w1, col_w2, col_w3);
+    for (int i = 0; i < tab->length; i++) {
+        printf(format,
+                tab->content[0][i],
+                tab->content[1][i],
+                tab->content[2][i],
+                tab->content[3][i]);
+    }
+}
+
+void free_table4(struct Table4 *tab) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 1000; j++)
+            free(tab->content[i][j]);
+        free(tab->content[i]);
+    }
+    free(tab->content);
+}
+
+void cmd_ps() {
+    DIR *proc_dir = opendir("/proc");
+    struct dirent *entry;
+    struct Table4 tab;
+    init_table4(&tab);
+    append_table4(&tab, "PID", "PPID", "NAME", "STATE");
+    while ((entry = readdir(proc_dir)) != NULL) {
+        if (is_numeric(entry->d_name)) {
+            char status_path[1000];
+            sprintf(status_path, "/proc/%s/status", entry->d_name);
+            int status_fd = open(status_path, O_RDONLY);
+
+            char file_content[1000];
+            read(status_fd, file_content, 1000);
+            close(status_fd);
+
+            char name[1000];
+            extract(file_content, "Name:\t", name);
+            char pid[1000];
+            extract(file_content, "Pid:\t", pid);
+            char ppid[1000];
+            extract(file_content, "PPid:\t", ppid);
+            char state[1000];
+            extract(file_content, "State:\t", state);
+
+            append_table4(&tab, pid, ppid, name, state);
+        }
+    }
+    print_table4(&tab);
+    free_table4(&tab);
+    closedir(proc_dir);
+}
+
+struct MathToken {
+    double value;
+    char operation; // '+', '-', '*', '/', '^', '\0' - for value tokens
+    int nesting_level;
+};
+
+int operation_priority(struct MathToken *token) {
+    int priority = token->nesting_level * 3;
+    if (token->operation == '+' || token->operation == '-')
+        priority += 0;
+    if (token->operation == '*' || token->operation == '/')
+        priority += 1;
+    if (token->operation == '^')
+        priority += 2;
+    return priority;
+}
+
+void push_value_token(struct MathToken *tokens, int *size, double value, int nesting_level) {
+    tokens[*size].operation = '\0';
+    tokens[*size].value = value;
+    tokens[*size].nesting_level = nesting_level;
+    (*size)++;
+}
+
+void push_operation_token(struct MathToken *tokens, int *size, char operation, int nesting_level) {
+    tokens[*size].operation = operation;
+    tokens[*size].value = -2137.;
+    tokens[*size].nesting_level = nesting_level;
+    (*size)++;
+}
+
+void print_token(const struct MathToken * const token) {
+    if (token->operation == '\0')
+        printf("%10f  %d\n", token->value, token->nesting_level);
+    else
+        printf("%10c  %d\n", token->operation, token->nesting_level);
+}
+
+void print_tokens(struct MathToken *tokens, int size) {
+    printf("%10s  %s\n", "value", "nesting level");
+    for (int i = 0; i < size; i++)
+        print_token(tokens + i);
+}
+
+// [from, to] inclusive
+void replace_tokens(struct MathToken *tokens, int *size, int from, int to, const struct MathToken * const new_token) {
+    int removed_count = to - from + 1;
+    int shift = removed_count - 1;
+    // shift tokens [to + 1, size - 1] by `shift` to left
+    for (int i = to + 1; i < *size; i++)
+        memcpy(tokens + i - shift, tokens + i, sizeof(struct MathToken));
+    // insert copy of new token into correct position
+    memcpy(tokens + from, new_token, sizeof(struct MathToken));
+
+    // adjuest size
+    *size -= removed_count;
+    (*size)++; // one new was added
+}
+
+
+// isdigit extened by '.'
+bool isdigitx(char c) {
+    return isdigit(c) || c == '.';
+}
+
+bool is_digits_buffer_zero(const char * const db) {
+    for (int i = 0; db[i] != '\0'; i++) {
+        if (db[i] != '0' && db[i] != '.')
+            return false;
+    }
+    return true;
+}
+
+// returns true on success, false on failure
+bool parse_digits(char *db, double *out) {
+    int dot_pos = -1;
+    int length = 0; // number of digits
+    for (int i = 0; db[i] != '\0'; i++) {
+        if (db[i] == '.') {
+            if (dot_pos == -1)
+                dot_pos = i;
+            else {
+                fprintf(stderr, "Error: Multiple dots in parsed string\n");
+                return false;
+            }
+        } else
+            length++;
+    }
+    if (dot_pos == -1)
+        dot_pos = length;
+    // dot_pos = (number of digits before the dot)
+    // length - dot_pos = (number of digits after the dot)
+    double num = 0;
+    double power = 1;
+    for (int i = dot_pos - 1; i >= 0; i--) {
+        num += (db[i] - '0') * power;
+        power *= 10;
+    }
+    power = .1;
+    for (int i = dot_pos + 1; i <= length; i++) {
+        num += (db[i] - '0') * power;
+        power /= 10;
+    }
+    *out = num;
+    return true;
+}
+
+// returns true on success, false on failure
+bool perform_token2(struct MathToken *tokens, int *size, int oper_idx, double (*f)(double, double)) {
+    if (oper_idx == 0 || oper_idx == *size - 1) {
+        fprintf(stderr, "Error #1: missing operand\n");
+        return false;
+    }
+    struct MathToken *lop = &tokens[oper_idx - 1]; // left operand
+    struct MathToken *rop = &tokens[oper_idx + 1]; // right operand
+    if (lop->nesting_level != tokens[oper_idx].nesting_level ||
+            rop->nesting_level != tokens[oper_idx].nesting_level) {
+        fprintf(stderr, "Error #2: wrong nesting level of operands\n");
+        return false;
+    }
+    if (lop->operation != '\0' || rop->operation != '\0') {
+        fprintf(stderr, "Error #3: wrong operands\n");
+        return false;
+    }
+    // replace tokens oper_idx-1, oper_idx, oper_idx+1 with new result token
+    struct MathToken result;
+    result.value = f(lop->value, rop->value);
+    result.operation = '\0';
+    // set nesting level of result to the highest nesting level of neigboring tokens
+    // After addition those tokens are token[oper_idx - 2] and token[oper_idx + 2].
+    int left_nl = 0;
+    if (oper_idx - 2 >= 0)
+        left_nl = tokens[oper_idx - 2].nesting_level;
+    int right_nl = 0;
+    if (oper_idx + 2 < *size)
+        left_nl = tokens[oper_idx + 2].nesting_level;
+    int nl = max(left_nl, right_nl);
+    result.nesting_level = nl;
+    replace_tokens(tokens, size, oper_idx - 1, oper_idx + 1, &result);
+    return true;
+}
+
+// returns true on success, false on failure
+bool perform_token1(struct MathToken *tokens, int *size, int oper_idx, double (*f)(double)) {
+    // make sure there is a token on the right
+    if (oper_idx == *size - 1) {
+        fprintf(stderr, "Error #1: missing operand\n");
+        return false;
+    }
+    // make sure token on the right is a number with same nesting level
+    if (tokens[oper_idx + 1].operation != '\0' ||
+        tokens[oper_idx + 1].nesting_level == tokens[oper_idx].nesting_level) {
+        fprintf(stderr, "Error #2: wrong operand\n");
+        return false;
+    }
+    struct MathToken *rop = &tokens[oper_idx + 1]; // right operand
+    // replace tokens oper_idx, oper_idx, oper_idx+1 with new result token
+    struct MathToken result;
+    result.value = f(rop->value);
+    result.operation = '\0';
+    // set nesting level of result to the highest nesting level of neigboring tokens
+    // After addition those tokens are token[oper_idx - 2] and token[oper_idx + 2].
+    int left_nl = 0;
+    if (oper_idx - 2 >= 0)
+        left_nl = tokens[oper_idx - 2].nesting_level;
+    int right_nl = 0;
+    if (oper_idx + 2 < *size)
+        left_nl = tokens[oper_idx + 2].nesting_level;
+    int nl = max(left_nl, right_nl);
+    result.nesting_level = nl;
+    replace_tokens(tokens, size, oper_idx, oper_idx + 1, &result);
+    return true;
+}
+
+double op_addition(double a, double b) {
+    return a + b;
+}
+
+double op_subtraction(double a, double b) {
+    return a - b;
+}
+
+double op_opposite(double a) {
+    return -a;
+}
+
+double op_multiplication(double a, double b) {
+    return a * b;
+}
+
+double op_division(double a, double b) {
+    return a / b;
+}
+
+double op_exponentiation(double a, double b) {
+    return pow(a, b);
+}
+
+void cmd_calc(int argc, char **argv) {
+    if (argc == 1) {
+        fprintf(stderr, "provide expression, e.g. (2 + 2) * 8\n");
+        return;
+    }
+    // merge argv into expression
+    char expression[1000];
+    int idx = 0;
+    for (int i = 1; i < argc; i++) {
+        strcpy(expression + idx, argv[i]);
+        idx += strlen(argv[i]);
+    }
+    // remove whitespace
+    int lgc = -1; // index of last graphic character
+    for (int i = 0; i < strlen(expression); i++) {
+        if (isgraph(expression[i]))
+            expression[++lgc] = expression[i];
+    }
+    // replace ',' with '.'
+    for (int i = 0; i < strlen(expression); i++) {
+        if (expression[i] == ',')
+            expression[i] = '.';
+    }
+    // check characters
+    for (int i = 0; i < strlen(expression); i++) {
+        if (!isdigit(expression[i]) &&
+                expression[i] != '+' &&
+                expression[i] != '-' &&
+                expression[i] != '*' &&
+                expression[i] != '/' &&
+                expression[i] != '^' &&
+                expression[i] != '(' &&
+                expression[i] != ')' &&
+                expression[i] != '.') {
+            fprintf(stderr, "invalid character %c\n", expression[i]);
+            fprintf(stderr, "%s\n", expression);
+            for(int j = 0; j < i; j++)
+                fprintf(stderr, " ");
+            fprintf(stderr, "^\n");
+            return;
+        }
+    }
+    // check parenthesis
+    int open_count = 0;
+    for (int i = 0; i < strlen(expression); i++) {
+        if (expression[i] == '(')
+            open_count++;
+        if (expression[i] == ')')
+            open_count--;
+        if (open_count < 0) {
+            fprintf(stderr, "missing opening bracket\n");
+            fprintf(stderr, "%s\n", expression);
+            for (int j = 0; j < i; j++)
+                fprintf(stderr, " ");
+            fprintf(stderr, "^\n");
+            return;
+        }
+    }
+    if (open_count > 0) {
+        fprintf(stderr, "missing closing bracket\n");
+        return;
+    }
+    printf("%s = ?\n", expression);
+    // tokenize
+    struct MathToken tokens[1000];
+    int tokens_size = 0;
+    int nesting_level = 0;
+    char digits_buffer[1000];
+    memset(digits_buffer, 0, 1000);
+    int db_idx = 0;
+    for (int i = 0; i < strlen(expression); i++) {
+        if (isdigitx(expression[i])) {
+            digits_buffer[db_idx++] = expression[i];
+        } else {
+            if (db_idx > 0) {
+                double num = 0;
+                bool succ = parse_digits(digits_buffer, &num);
+                if (!succ) {
+                    fprintf(stderr, "couldn't parse %s\n", digits_buffer);
+                    return;
+                }
+                memset(digits_buffer, 0, 1000);
+                db_idx = 0;
+                push_value_token(tokens, &tokens_size, num, nesting_level);
+            }
+            if (expression[i] == '(')
+                nesting_level++;
+            else if (expression[i] == ')')
+                nesting_level--;
+            else
+                push_operation_token(tokens, &tokens_size, expression[i], nesting_level);
+        }
+    }
+    if (db_idx > 0) {
+        double num = 0;
+        bool succ = parse_digits(digits_buffer, &num);
+        if (!succ) {
+            fprintf(stderr, "couldn't parse %s\n", digits_buffer);
+            return;
+        }
+        memset(digits_buffer, 0, 1000);
+        db_idx = 0;
+        push_value_token(tokens, &tokens_size, num, nesting_level);
+    }
+    // evaluate expression
+    while (tokens_size > 1) {
+        print_tokens(tokens, tokens_size);
+
+        // find operation with highest priority
+        int highest_priority = -1;
+        int oper_idx = -1;
+        for (int i = 0; i < tokens_size; i++) {
+            if (tokens[i].operation != '\0') {
+                int op = operation_priority(&tokens[i]);
+                if (op > highest_priority) {
+                    highest_priority = op;
+                    oper_idx = i;
+                }
+            }
+
+        }
+        if (oper_idx == -1) {
+            fprintf(stderr, "Error: no operations\n");
+            return;
+        }
+        // perform operation
+        bool succ = false;
+        switch (tokens[oper_idx].operation) {
+            case '+': {
+                succ = perform_token2(tokens, &tokens_size, oper_idx, op_addition);
+                break;
+            }
+            case '-': {
+                // is token on left a number
+                if (tokens[oper_idx - 1].operation == '\0' &&
+                    tokens[oper_idx - 1].nesting_level == tokens[oper_idx].nesting_level)
+                    succ = perform_token2(tokens, &tokens_size, oper_idx, op_subtraction);
+                else
+                    succ = perform_token1(tokens, &tokens_size, oper_idx, op_opposite);
+                break;
+            }
+            case '*': {
+                succ = perform_token2(tokens, &tokens_size, oper_idx, op_multiplication);
+                break;
+            }
+            case '/': {
+                succ = perform_token2(tokens, &tokens_size, oper_idx, op_division);
+                break;
+            }
+            case '^': {
+                succ = perform_token2(tokens, &tokens_size, oper_idx, op_exponentiation);
+                break;
+            }
+        }
+        if (!succ) {
+            fprintf(stderr, "Error: operation failed\n");
+            return;
+        }
+        printf("\n");
+    }
+    // print results
+    printf("%f\n", tokens[0].value);
 }
 
 int main() {
-    setlocale(LC_ALL, "pl_PL.utf8");
+    setlocale(LC_ALL, "en_EN.utf8");
     // main loop
     while (true) {
         char *line = malloc(user_buffer_size * sizeof(char));
@@ -364,6 +907,16 @@ int main() {
             cmd_exit();
         else if (strcmp(args[0], "cd") == 0)
             cmd_cd(count, args);
+        else if (strcmp(args[0], "type") == 0)
+            cmd_type(count, args);
+        else if (strcmp(args[0], "args") == 0)
+            cmd_args(count, args);
+        else if (strcmp(args[0], "help") == 0)
+            cmd_help();
+        else if (strcmp(args[0], "ps") == 0)
+            cmd_ps();
+        else if (strcmp(args[0], "calc") == 0)
+            cmd_calc(count, args);
         else
             execute_command(args[0], args, count);
 
