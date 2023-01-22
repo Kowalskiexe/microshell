@@ -286,15 +286,24 @@ void read_input(char * const buff, const int buff_size) {
 int parse_arguments(const char *const line, char **buff) {
     int top = 0;
     int idx = 0;
+    const char no_quote = -1;
+    char opening_quote = no_quote;
     for (int i = 0; i < strlen(line); i++) {
-        if (isspace(line[i])) {
+        if (opening_quote == no_quote && isspace(line[i])) {
             if (idx > 0) {
                 buff[top++][idx] = '\0';
                 idx = 0;
             }
         } else {
-            buff[top][idx] = line[i];
-            idx++;
+            if (line[i] == '\'' || line[i] == '\"') {
+                if (opening_quote == no_quote) {
+                        opening_quote = line[i];
+                } else {
+                    if (opening_quote == line[i])
+                        opening_quote = no_quote;
+                }
+            } else
+                buff[top][idx++] = line[i];
         }
     }
     // make sure the last argument ends with a null terminator
