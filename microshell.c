@@ -37,6 +37,7 @@ void print_tcflag(tcflag_t flag) {
 
 const int max_word_count = 1000;
 const int max_word_length = 1000; // including null terminator
+const int user_buffer_size = 1000;
 
 int get_terminal_width() {
     struct winsize w;
@@ -341,10 +342,8 @@ int main() {
     setlocale(LC_ALL, "pl_PL.utf8");
     // main loop
     while (true) {
-        //get_prompt();
-
-        char *line = malloc(1000 * sizeof(char));
-        read_input(line, 1000);
+        char *line = malloc(user_buffer_size * sizeof(char));
+        read_input(line, user_buffer_size);
         printf("\n");
 
         char **args = malloc(max_word_count * sizeof(char*));
