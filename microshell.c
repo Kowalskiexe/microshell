@@ -679,7 +679,7 @@ bool perform_token1(struct MathToken *tokens, int *size, int oper_idx, double (*
     }
     // make sure token on the right is a number with same nesting level
     if (tokens[oper_idx + 1].operation != '\0' ||
-        tokens[oper_idx + 1].nesting_level == tokens[oper_idx].nesting_level) {
+        tokens[oper_idx + 1].nesting_level != tokens[oper_idx].nesting_level) {
         fprintf(stderr, "Error #2: wrong operand\n");
         return false;
     }
