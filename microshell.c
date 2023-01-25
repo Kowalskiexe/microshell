@@ -40,8 +40,18 @@
 #define UNDERLINE "\e[4m"
 // foreground - \e[38;2;r;g;b
 #define FRED "\e[38;2;255;0;0m"
+#define FGREEN "\e[38;2;0;255;0m"
+#define FBLUE "\e[38;2;0;0;255m"
+#define FWHITE "\e[38;2;255;255;255m"
+#define FBLACK "\e[38;2;0;0;0m"
+#define FYELLOW "\e[38;2;255;255;0m"
 // background - \e[38;2;r;g;b
 #define BRED "\e[48;2;255;0;0m"
+// custom
+// #6c8197
+#define CPATH "\e[38;2;108;129;151m"
+// #ecc667
+#define CPROMPT "\e[38;2;236;198;103m"
 
 // strlen but not counting escape codes
 int _strlen(const char * const str) {
@@ -411,7 +421,7 @@ void execute_command(char *name, char **args, const int args_count) {
 char *get_prompt() {
     char *path = getcwd(NULL, 0);
     char *out = malloc(1000 * sizeof(char));
-    sprintf(out, "%s[%s]%s $", FRED, path, RESET);
+    sprintf(out, "%s[%s]%s %s$%s ", CPATH, path, RESET, CPROMPT, RESET);
     return out;
 }
 
@@ -423,7 +433,7 @@ void cmd_exit() {
 char last_cd_location[1000] = {'\0'};
 void cmd_cd(int argc, char **argv) {
     if (argc > 2) {
-        fprintf(stderr, "too many arguments!\n");
+        fprintf(stderr, "%stoo many arguments!%s\n", FRED, RESET);
         return;
     }
     char target_location[1000];
@@ -443,16 +453,16 @@ void cmd_cd(int argc, char **argv) {
     strcpy(last_cd_location, getcwd(NULL, 0));
     int ret = chdir(target_location);
     if (ret == -1)
-        fprintf(stderr, "cd: The directory \"%s\" does not exist\n", target_location);
+        fprintf(stderr, "%scd: The directory \"%s\" does not exist%s\n", FRED, target_location, RESET);
 }
 
 void cmd_type(int argc, char **argv) {
     if (argc == 1) {
-        fprintf(stderr, "name a command!\n");
+        fprintf(stderr, "%sname a command!%s\n", FRED, RESET);
         return;
     }
     if (argc > 2) {
-        fprintf(stderr, "too many arguments!\n");
+        fprintf(stderr, "%stoo many arguments!%s\n", FRED, RESET);
         return;
     }
     // argc == 2
@@ -478,13 +488,14 @@ void cmd_args(int argc, char **argv) {
 }
 
 void cmd_help() {
-    printf("microshell by Maciej Kowalski (481828), avaible commands:\n");
-    printf("  help - see this list of avaible commands\n");
-    printf("  exit - exit microshell\n");
-    printf("  type - see if command is external or a bulitin\n");
-    printf("  calc - evaluate an arithmetic expression (dodatkowa komenda powłoki #1)\n");
-    printf("    cd - change working directory\n");
-    printf("    ps - list running processes (dodatkowa komenda powłoki #2)\n");
+    printf("%smicroshell%s by Maciej Kowalski (481828), avaible commands:\n", BOLD, RESET);
+    printf("  %shelp%s - see this list of avaible commands\n", ITALIC, RESET);
+    printf("  %sexit%s - exit microshell\n", ITALIC, RESET);
+    printf("  %stype%s - see if command is external or a bulitin\n", ITALIC, RESET);
+    printf("  %scalc%s - evaluate an arithmetic expression (dodatkowa komenda powłoki #1)\n", ITALIC, RESET);
+    printf("    %scd%s - change working directory\n", ITALIC, RESET);
+    printf("    %sps%s - list running processes (dodatkowa komenda powłoki #2)\n", ITALIC, RESET);
+    // TODO: spis bajerów
 }
 
 bool is_numeric(char *str) {
