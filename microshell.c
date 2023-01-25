@@ -43,7 +43,20 @@
 // background - \e[38;2;r;g;b
 #define BRED "\e[48;2;255;0;0m"
 
-// TODO: strlen() omitting escape codes!!!!!!!!!!!
+// strlen but not counting escape codes
+int _strlen(const char * const str) {
+    int len = 0;
+    bool is_escaped = false;
+    for (int i = 0; str[i] != '\0'; i++) {
+        if (str[i] == '\e')
+            is_escaped = true;
+        if (!is_escaped)
+            len++;
+        if (is_escaped && str[i] == 'm')
+            is_escaped = false;
+    }
+    return len;
+}
 
 void print_tcflag(tcflag_t flag) {
     for (int i = sizeof(tcflag_t) * 8 - 1; i >= 0; i--) {
@@ -87,7 +100,7 @@ void end_cursor_control() {
 // adjusts x and y as if buff's contents were printed
 void buff_shift(const char * const buff, int *x, int *y) {
     int width = get_terminal_width();
-    for (int i = 0; i < strlen(buff); i++) {
+    for (int i = 0; i < _strlen(buff); i++) {
         if (buff[i] == '\n') {
             *x = 0;
             (*y)++;
@@ -113,17 +126,24 @@ void ccprintf(const char *const format, ...) {
     vsprintf(buff, format, args);
     va_end(args);
     int width = get_terminal_width();
+    bool is_escaped = false;
     for (int i = 0; i < strlen(buff); i++) {
         printf("%c", buff[i]);
         fflush(stdout);
-        if (_x == width - 1) {
-            printf("\n");
-            fflush(stdout);
-            _x = 0;
-            _y++;
+        if (buff[i] == '\e')
+            is_escaped = true;
+        if (!is_escaped) {
+            if (_x == width - 1) {
+                printf("\n");
+                fflush(stdout);
+                _x = 0;
+                _y++;
+            }
+            else
+                _x++;
         }
-        else
-            _x++;
+        if (is_escaped && buff[i] == 'm')
+            is_escaped = false;
     }
 }
 
@@ -228,7 +248,7 @@ void print_buffer(const char * const user_buffer, int pos) {
 
     // move cursor to the correct position
     int width = get_terminal_width();
-    pos += strlen(prompt);
+    pos += _strlen(prompt);
     int x = pos % width;
     int y = pos / width;
     ccreset_cursor();
