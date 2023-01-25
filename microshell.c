@@ -30,6 +30,8 @@
 #define fflush(stdout);
 #endif
 
+// Terminal manipulation is done with escape codes:
+// https://en.wikipedia.org/wiki/ANSI_escape_code
 
 void print_tcflag(tcflag_t flag) {
     for (int i = sizeof(tcflag_t) * 8 - 1; i >= 0; i--) {
@@ -51,6 +53,10 @@ int get_terminal_width() {
 
 int max(int a, int b) {
     return a > b ? a : b;
+}
+
+int min(int a, int b) {
+    return a < b ? a : b;
 }
 
 bool _cursor_control = false;
@@ -236,7 +242,7 @@ void read_input(char * const buff, const int buff_size) {
     char c;
     int pos = 0;
     int length = 0;
-    memset(buff, 0, buff_size * sizeof(char));
+    memset(buff, 0, buff_size);
     // position in history counting from the end of the array
     int his_cur = -1; // -1 - clean buffer
 
@@ -256,8 +262,10 @@ void read_input(char * const buff, const int buff_size) {
                             his_cur++;
                             int idx = his_top - 1 - his_cur;
                             // set buffer
+                            memset(buff, 0, buff_size);
                             strcpy(buff, history[idx]);
                             length = strlen(buff);
+                            pos = min(pos, length);
                         }
                         break;
                     case ARROW_DOWN:
@@ -266,14 +274,16 @@ void read_input(char * const buff, const int buff_size) {
                             his_cur--;
                             if (his_cur == -1) {
                                 // set clean buffer
-                                buff[0] = 0;
+                                memset(buff, 0, buff_size);
                                 length = 0;
                                 pos = 0;
                             } else {
                                 // set buffer from history
                                 int idx = his_top - 1 - his_cur;
+                                memset(buff, 0, buff_size);
                                 strcpy(buff, history[idx]);
                                 length = strlen(buff);
+                                pos = min(pos, length);
                             }
                         }
                         break;
@@ -295,7 +305,7 @@ void read_input(char * const buff, const int buff_size) {
                 }
                 break;
             case BACKSPACE:
-                if (length > 0) {
+                if (length > 0 && pos > 0) {
                     remove_character_at(buff, pos - 1);
                     pos--;
                     length--;
