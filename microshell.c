@@ -33,6 +33,18 @@
 // Terminal manipulation is done with escape codes:
 // https://en.wikipedia.org/wiki/ANSI_escape_code
 
+// SGR (Select Graphic Rendition) parameters
+#define RESET "\e[0m"
+#define BOLD "\e[1m"
+#define ITALIC "\e[3m"
+#define UNDERLINE "\e[4m"
+// foreground - \e[38;2;r;g;b
+#define FRED "\e[38;2;255;0;0m"
+// background - \e[38;2;r;g;b
+#define BRED "\e[48;2;255;0;0m"
+
+// TODO: strlen() omitting escape codes!!!!!!!!!!!
+
 void print_tcflag(tcflag_t flag) {
     for (int i = sizeof(tcflag_t) * 8 - 1; i >= 0; i--) {
         tcflag_t mask = 1 << i;
@@ -379,7 +391,7 @@ void execute_command(char *name, char **args, const int args_count) {
 char *get_prompt() {
     char *path = getcwd(NULL, 0);
     char *out = malloc(1000 * sizeof(char));
-    sprintf(out, "[%s] $", path);
+    sprintf(out, "%s[%s]%s $", FRED, path, RESET);
     return out;
 }
 
