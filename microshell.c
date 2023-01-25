@@ -230,13 +230,19 @@ void remove_character_at(char *str, int pos) {
         str[i] = str[i + 1];
 }
 
+char history[200][1000];
+int his_top = 0; // first free slot / length
 void read_input(char * const buff, const int buff_size) {
     char c;
     int pos = 0;
     int length = 0;
     memset(buff, 0, buff_size * sizeof(char));
+    // position in history counting from the end of the array
+    int his_cur = -1; // -1 - clean buffer
+
     init_cursor_control();
     print_buffer(buff, pos);
+
     do {
         c = getchar_unbuffered();
         switch (c) {
@@ -245,10 +251,31 @@ void read_input(char * const buff, const int buff_size) {
                 char c3 = getchar_unbuffered();
                 switch (c3) {
                     case ARROW_UP:
-                        //printf("UP");
+                        // older in history
+                        if (his_cur < his_top - 1) {
+                            his_cur++;
+                            int idx = his_top - 1 - his_cur;
+                            // set buffer
+                            strcpy(buff, history[idx]);
+                            length = strlen(buff);
+                        }
                         break;
                     case ARROW_DOWN:
-                        //printf("DOWN");
+                        // newer in history or clear
+                        if (his_cur > -1) {
+                            his_cur--;
+                            if (his_cur == -1) {
+                                // set clean buffer
+                                buff[0] = 0;
+                                length = 0;
+                                pos = 0;
+                            } else {
+                                // set buffer from history
+                                int idx = his_top - 1 - his_cur;
+                                strcpy(buff, history[idx]);
+                                length = strlen(buff);
+                            }
+                        }
                         break;
                     case ARROW_RIGHT:
                         if (pos < length)
@@ -288,6 +315,10 @@ void read_input(char * const buff, const int buff_size) {
     print_buffer(buff, length);
     fflush(stdout);
     end_cursor_control();
+
+    // don't add empty input
+    if (length > 0)
+        strcpy(history[his_top++], buff);
 }
 
 // returns number of arguments
@@ -384,9 +415,12 @@ void cmd_type(int argc, char **argv) {
     }
     // argc == 2
     bool builtin = false;
+    builtin |= strcmp(argv[1], "help") == 0;
     builtin |= strcmp(argv[1], "exit") == 0;
-    builtin |= strcmp(argv[1], "cd") == 0;
     builtin |= strcmp(argv[1], "type") == 0;
+    builtin |= strcmp(argv[1], "calc") == 0;
+    builtin |= strcmp(argv[1], "cd") == 0;
+    builtin |= strcmp(argv[1], "ps") == 0;
     builtin |= strcmp(argv[1], "args") == 0;
     if (builtin)
         printf("builtin\n");
@@ -903,7 +937,9 @@ int main() {
             args[i] = malloc(max_word_length * sizeof(char));
         int count = parse_arguments(line, args);
 
-        if (strcmp(args[0], "exit") == 0)
+        if (args[0] == NULL)
+            ; // skip
+        else if (strcmp(args[0], "exit") == 0)
             cmd_exit();
         else if (strcmp(args[0], "cd") == 0)
             cmd_cd(count, args);
