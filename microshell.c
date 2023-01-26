@@ -845,10 +845,15 @@ double op_exponentiation(double a, double b) {
     return pow(a, b);
 }
 
-// TODO: print supported operations
 void cmd_calc(int argc, char **argv) {
     if (argc == 1) {
         fprintf(stderr, "%sprovide expression, e.g. (2 + 2) * 8%s\n", FG_RED, RESET);
+        printf("supported operations:\n");
+        printf("  + - addtion\n");
+        printf("  - - subtraction\n");
+        printf("  * - multiplication\n");
+        printf("  / - division\n");
+        printf("  ^ - exponentiation\n");
         return;
     }
     // merge argv into expression
