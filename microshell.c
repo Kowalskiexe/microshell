@@ -434,7 +434,7 @@ void execute_command(char *name, char **args, const int args_count) {
 // returns prompt's content
 char *get_prompt() {
     char *path = getcwd(NULL, 0);
-    char *out = malloc(1000 * sizeof(char));
+    char *out = malloc(1000);
     sprintf(out, "%s[%s]%s %s$%s ", C_PATH, path, RESET, C_PROMPT, RESET);
     return out;
 }
@@ -537,7 +537,7 @@ void extract(const char * const content, const char * const field, char * outbuf
         exit(2);
     }
     int length = end - start + 1;
-    memcpy(outbuff, start, length * sizeof(char));
+    memcpy(outbuff, start, length);
     outbuff[length] = '\0';
 }
 
@@ -553,7 +553,7 @@ void init_table4(struct Table4 *tab) {
     for (int i = 0; i < 4; i++) {
         tab->content[i] = malloc(1000 * sizeof(char *));
         for (int j = 0; j < 1000; j++)
-            tab->content[i][j] = malloc(200 * sizeof(char));
+            tab->content[i][j] = malloc(200);
     }
 }
 
@@ -1024,13 +1024,13 @@ int main() {
     setlocale(LC_ALL, "en_EN.utf8");
     // main loop
     while (true) {
-        char *line = malloc(user_buffer_size * sizeof(char));
+        char *line = malloc(user_buffer_size);
         read_input(line, user_buffer_size);
         printf("\n");
 
         char **args = malloc(max_word_count * sizeof(char*));
         for (int i = 0; i < max_word_count; i++)
-            args[i] = malloc(max_word_length * sizeof(char));
+            args[i] = malloc(max_word_length);
         int count = parse_arguments(line, args);
 
         if (args[0] == NULL)
