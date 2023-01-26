@@ -150,13 +150,11 @@ void ccprintf(const char *const format, ...) {
     bool is_escaped = false;
     for (int i = 0; i < strlen(buff); i++) {
         printf("%c", buff[i]);
-        fflush(stdout);
         if (buff[i] == '\e')
             is_escaped = true;
         if (!is_escaped) {
             if (_x == width - 1) {
                 printf("\n");
-                fflush(stdout);
                 _x = 0;
                 _y++;
             }
@@ -244,28 +242,21 @@ void print_buffer(const char * const user_buffer, int pos) {
     // clear
     char *prompt = get_prompt();
     ccreset_cursor();
-    fflush(stdout);
     int old_x = 0, old_y = 0;
     buff_shift(_old_buffer, &old_x, &old_y);
 
     for (int i = 0; i <= old_y; i++) {
         printf("\e[2K"); // erase line (cursor position does not change)
-        fflush(stdout);
         // if this isn't the last line
         if (i < old_y) {
             ccmove_cursor(0, 1); // move cursor down
-            fflush(stdout);
         }
     }
-    fflush(stdout);
     ccreset_cursor();
-    fflush(stdout);
 
     // redraw
     ccprintf("%s", prompt);
-    fflush(stdout);
     ccprintf("%s", user_buffer);
-    fflush(stdout);
     sprintf(_old_buffer, "%s%s", prompt, user_buffer);
 
     // move cursor to the correct position
@@ -377,7 +368,6 @@ void read_input(char * const buff, const int buff_size) {
     } while (c != EOF && c != '\n');
     // move cursor to the end
     print_buffer(buff, length);
-    fflush(stdout);
     end_cursor_control();
 
     // don't add empty input
@@ -495,7 +485,7 @@ void cmd_type(int argc, char **argv) {
     if (builtin)
         printf("builtin\n");
     else
-        printf("external\n"); // TODO: detect programs (?)
+        printf("external\n");
 }
 
 // for testing parsing
@@ -541,13 +531,13 @@ void extract(const char * const content, const char * const field, char * outbuf
     outbuff[length] = '\0';
 }
 
-// TODO: ranme to process table and add coloring
-struct Table4 {
+// TODO: ranme to process table
+struct PSTable {
     int length;
     char ***content;
 };
 
-void init_table4(struct Table4 *tab) {
+void init_ps_table(struct PSTable *tab) {
     tab->length = 0;
     tab->content = malloc(4 * sizeof(char **));
     for (int i = 0; i < 4; i++) {
@@ -557,7 +547,7 @@ void init_table4(struct Table4 *tab) {
     }
 }
 
-void append_table4(struct Table4 *tab, char *col0, char *col1, char *col2, char *col3) {
+void append_ps_table(struct PSTable *tab, char *col0, char *col1, char *col2, char *col3) {
     strcpy(tab->content[0][tab->length], col0);
     strcpy(tab->content[1][tab->length], col1);
     strcpy(tab->content[2][tab->length], col2);
@@ -575,7 +565,7 @@ int longest_len(char *column[], int n) {
     return out;
 }
 
-void print_table4(struct Table4 *tab) {
+void print_ps_table(struct PSTable *tab) {
     // column lengths
     int col_w0 = longest_len(tab->content[0], tab->length);
     int col_w1 = longest_len(tab->content[1], tab->length);
@@ -615,7 +605,7 @@ void print_table4(struct Table4 *tab) {
     }
 }
 
-void free_table4(struct Table4 *tab) {
+void free_ps_table(struct PSTable *tab) {
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 1000; j++)
             free(tab->content[i][j]);
@@ -627,9 +617,9 @@ void free_table4(struct Table4 *tab) {
 void cmd_ps() {
     DIR *proc_dir = opendir("/proc");
     struct dirent *entry;
-    struct Table4 tab;
-    init_table4(&tab);
-    append_table4(&tab, "PID", "PPID", "NAME", "STATE");
+    struct PSTable tab;
+    init_ps_table(&tab);
+    append_ps_table(&tab, "PID", "PPID", "NAME", "STATE");
     while ((entry = readdir(proc_dir)) != NULL) {
         if (is_numeric(entry->d_name)) {
             char status_path[1000];
@@ -649,11 +639,11 @@ void cmd_ps() {
             char state[1000];
             extract(file_content, "State:\t", state);
 
-            append_table4(&tab, pid, ppid, name, state);
+            append_ps_table(&tab, pid, ppid, name, state);
         }
     }
-    print_table4(&tab);
-    free_table4(&tab);
+    print_ps_table(&tab);
+    free_ps_table(&tab);
     closedir(proc_dir);
 }
 
