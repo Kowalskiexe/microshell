@@ -87,7 +87,7 @@ void print_tcflag(tcflag_t flag) {
     printf("\n");
 }
 
-const int max_word_count = 1000;
+const int max_word_count = 100;
 const int max_word_length = 1000; // including null terminator
 const int user_buffer_size = 1000;
 
@@ -266,12 +266,16 @@ void print_buffer(const char * const user_buffer, int pos) {
     int y = pos / width;
     ccreset_cursor();
     ccmove_cursor(x, y);
+
+    free(prompt);
 }
 
 void insert_character_at(char c, char *str, int pos) {
     int n = strlen(str);
-    for (int i = n; i >= pos; i--)
-        str[i] = str[i - 1];
+    if (n > 0) {
+        for (int i = n; i >= pos; i--)
+            str[i] = str[i - 1];
+    }
     str[pos] = c;
 }
 
@@ -426,6 +430,7 @@ char *get_prompt() {
     char *path = getcwd(NULL, 0);
     char *out = malloc(1000);
     sprintf(out, "%s[%s]%s %s$%s ", C_PATH, path, RESET, C_PROMPT, RESET);
+    free(path);
     return out;
 }
 
@@ -503,7 +508,11 @@ void cmd_help() {
     printf("  %scalc%s - evaluate an arithmetic expression (dodatkowa komenda powłoki #1)\n", ITALIC, RESET);
     printf("    %scd%s - change working directory\n", ITALIC, RESET);
     printf("    %sps%s - list running processes (dodatkowa komenda powłoki #2)\n", ITALIC, RESET);
-    // TODO: spis bajerów
+    printf("%sbajery:%s\n", BOLD, RESET);
+    printf("* pełna obsługa strzałek\n");
+    printf("* historia poleceń\n");
+    printf("* obsługa argumentów w nawiasach\n");
+    printf("* kolorowanie terminala\n");
 }
 
 bool is_numeric(char *str) {
@@ -531,7 +540,6 @@ void extract(const char * const content, const char * const field, char * outbuf
     outbuff[length] = '\0';
 }
 
-// TODO: ranme to process table
 struct PSTable {
     int length;
     char ***content;
@@ -1015,6 +1023,12 @@ void cmd_calc(int argc, char **argv) {
     printf("%s%f%s\n", FG_GREEN, tokens[0].value, RESET);
 }
 
+void free_args(char **args) {
+    for (int i = 0; i < max_word_count; i++)
+        free(args[i]);
+    free(args);
+}
+
 int main() {
     setlocale(LC_ALL, "en_EN.utf8");
     // main loop
@@ -1027,12 +1041,14 @@ int main() {
         for (int i = 0; i < max_word_count; i++)
             args[i] = malloc(max_word_length);
         int count = parse_arguments(line, args);
+        free(line);
 
         if (args[0] == NULL)
             ; // skip
-        else if (strcmp(args[0], "exit") == 0)
+        else if (strcmp(args[0], "exit") == 0) {
+            free_args(args);
             cmd_exit();
-        else if (strcmp(args[0], "cd") == 0)
+        } else if (strcmp(args[0], "cd") == 0)
             cmd_cd(count, args);
         else if (strcmp(args[0], "type") == 0)
             cmd_type(count, args);
@@ -1047,10 +1063,7 @@ int main() {
         else
             execute_command(args[0], args, count);
 
-        free(line);
-        for (int i = 0; i < max_word_count; i++)
-            free(args[i]);
-        free(args);
+        free_args(args);
     }
     return 0;
 }
