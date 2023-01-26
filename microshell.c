@@ -38,20 +38,32 @@
 #define BOLD "\e[1m"
 #define ITALIC "\e[3m"
 #define UNDERLINE "\e[4m"
+
 // foreground - \e[38;2;r;g;b
-#define FRED "\e[38;2;255;0;0m"
-#define FGREEN "\e[38;2;0;255;0m"
-#define FBLUE "\e[38;2;0;0;255m"
-#define FWHITE "\e[38;2;255;255;255m"
-#define FBLACK "\e[38;2;0;0;0m"
-#define FYELLOW "\e[38;2;255;255;0m"
+#define FG_RED "\e[38;2;255;0;0m"
+// #478C5C
+#define FG_GREEN "\e[38;2;71;140;92m"
+#define FG_BLUE "\e[38;2;0;0;255m"
+#define FG_WHITE "\e[38;2;255;255;255m"
+#define FG_BLACK "\e[38;2;0;0;0m"
+#define FG_YELLOW "\e[38;2;255;255;0m"
+
 // background - \e[38;2;r;g;b
-#define BRED "\e[48;2;255;0;0m"
+#define BG_RED "\e[48;2;255;0;0m"
+
 // custom
-// #6c8197
-#define CPATH "\e[38;2;108;129;151m"
-// #ecc667
-#define CPROMPT "\e[38;2;236;198;103m"
+// #6C8197
+#define C_PATH "\e[38;2;108;129;151m"
+// #ECC667
+#define C_PROMPT "\e[38;2;236;198;103m"
+
+// ps command
+// #B4F8C8
+#define PS_RUNNING "\e[38;2;180;248;200m"
+// #A0E7E5
+#define PS_IDLE "\e[38;2;160;231;229m"
+// #FFAEBC
+#define PS_SLEEPING "\e[38;2;255;174;188m"
 
 // strlen but not counting escape codes
 int _strlen(const char * const str) {
@@ -127,7 +139,7 @@ void buff_shift(const char * const buff, int *x, int *y) {
 
 void ccprintf(const char *const format, ...) {
     if (!_cursor_control) {
-        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        fprintf(stderr, "%sError: cursor control is uninitialized%s, \n", FG_RED, RESET);
         return;
     }
     va_list args;
@@ -160,7 +172,7 @@ void ccprintf(const char *const format, ...) {
 // moves cursor on screen
 void ccmove_cursor(int dx, int dy) {
     if (!_cursor_control) {
-        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        fprintf(stderr, "%sError: cursor control is uninitialized%s\n", FG_RED, RESET);
         return;
     }
     // escape codes with 0 still move cursor by one
@@ -182,7 +194,7 @@ void ccmove_cursor(int dx, int dy) {
 
 int ccget_x() {
     if (!_cursor_control) {
-        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        fprintf(stderr, "%sError: cursor control is uninitialized%s\n", FG_RED, RESET);
         return 0;
     }
     return _x;
@@ -190,7 +202,7 @@ int ccget_x() {
 
 int ccget_y() {
     if (!_cursor_control) {
-        fprintf(stderr, "Error: cursor control is uninitialized\n");
+        fprintf(stderr, "%sError: cursor control is uninitialized%s\n", FG_RED, RESET);
         return 0;
     }
     return _y;
@@ -410,7 +422,9 @@ void execute_command(char *name, char **args, const int args_count) {
     if (id == 0) {
         args[args_count] = NULL;
         execvp(name, args);
+        printf("%s", FG_RED);
         perror("Error");
+        printf("%s", RESET);
         exit(EXIT_FAILURE);
     } else {
         wait(NULL);
@@ -421,7 +435,7 @@ void execute_command(char *name, char **args, const int args_count) {
 char *get_prompt() {
     char *path = getcwd(NULL, 0);
     char *out = malloc(1000 * sizeof(char));
-    sprintf(out, "%s[%s]%s %s$%s ", CPATH, path, RESET, CPROMPT, RESET);
+    sprintf(out, "%s[%s]%s %s$%s ", C_PATH, path, RESET, C_PROMPT, RESET);
     return out;
 }
 
@@ -433,7 +447,7 @@ void cmd_exit() {
 char last_cd_location[1000] = {'\0'};
 void cmd_cd(int argc, char **argv) {
     if (argc > 2) {
-        fprintf(stderr, "%stoo many arguments!%s\n", FRED, RESET);
+        fprintf(stderr, "%stoo many arguments!%s\n", FG_RED, RESET);
         return;
     }
     char target_location[1000];
@@ -450,19 +464,23 @@ void cmd_cd(int argc, char **argv) {
         else
             strcpy(target_location, argv[1]);
     }
-    strcpy(last_cd_location, getcwd(NULL, 0));
+    char tmp[1000];
+    strcpy(tmp, getcwd(NULL, 0));
     int ret = chdir(target_location);
     if (ret == -1)
-        fprintf(stderr, "%scd: The directory \"%s\" does not exist%s\n", FRED, target_location, RESET);
+        fprintf(stderr, "%scd: The directory \"%s\" does not exist%s\n", FG_RED, target_location, RESET);
+    else
+        // update last_cd_location only on success
+        strcpy(last_cd_location, tmp);
 }
 
 void cmd_type(int argc, char **argv) {
     if (argc == 1) {
-        fprintf(stderr, "%sname a command!%s\n", FRED, RESET);
+        fprintf(stderr, "%sname a command!%s\n", FG_RED, RESET);
         return;
     }
     if (argc > 2) {
-        fprintf(stderr, "%stoo many arguments!%s\n", FRED, RESET);
+        fprintf(stderr, "%stoo many arguments!%s\n", FG_RED, RESET);
         return;
     }
     // argc == 2
@@ -509,13 +527,13 @@ bool is_numeric(char *str) {
 void extract(const char * const content, const char * const field, char * outbuff) {
     char *start = strstr(content, field);
     if (start == NULL) {
-        fprintf(stderr, "error 1\n");
+        fprintf(stderr, "%serror 1%s\n", FG_RED, RESET);
         exit(1);
     }
     start += strlen(field);
     char *end = strstr(start, "\n") - 1;
     if (end == NULL) {
-        fprintf(stderr, "error 2\n");
+        fprintf(stderr, "%serror 2%s\n", FG_RED, RESET);
         exit(2);
     }
     int length = end - start + 1;
@@ -558,13 +576,37 @@ int longest_len(char *column[], int n) {
 }
 
 void print_table4(struct Table4 *tab) {
+    // column lengths
     int col_w0 = longest_len(tab->content[0], tab->length);
     int col_w1 = longest_len(tab->content[1], tab->length);
     int col_w2 = longest_len(tab->content[2], tab->length);
     int col_w3 = longest_len(tab->content[3], tab->length);
-    char format[1000];
-    sprintf(format, "%%%ds  %%%ds  %%-%ds  %%-%ds\n", col_w0, col_w1, col_w2, col_w3);
     for (int i = 0; i < tab->length; i++) {
+        char color_es[50]; // color escape code
+        strcpy(color_es, RESET);
+        // skip header
+        if (i > 0) {
+            // get first letter of STATE column
+            char state = tab->content[3][i][0];
+            // possible values: R, I, S
+            // R - running
+            // I - idle
+            // S - sleeping
+            switch (state) {
+                case 'R':
+                    strcpy(color_es, PS_RUNNING);
+                    break;
+                case 'I':
+                    strcpy(color_es, PS_IDLE);
+                    break;
+                case 'S':
+                    strcpy(color_es, PS_SLEEPING);
+                    break;
+            }
+        }
+        char format[1000];
+        sprintf(format, "%%%ds  %%%ds  %%-%ds  %s%%-%ds%s\n",
+                col_w0, col_w1, col_w2, color_es, col_w3, RESET);
         printf(format,
                 tab->content[0][i],
                 tab->content[1][i],
@@ -675,7 +717,7 @@ void replace_tokens(struct MathToken *tokens, int *size, int from, int to, const
 }
 
 
-// isdigit extened by '.'
+// isdigit extened by '.' for parsing floating point numbers
 bool isdigitx(char c) {
     return isdigit(c) || c == '.';
 }
@@ -697,7 +739,7 @@ bool parse_digits(char *db, double *out) {
             if (dot_pos == -1)
                 dot_pos = i;
             else {
-                fprintf(stderr, "Error: Multiple dots in parsed string\n");
+                fprintf(stderr, "%sError: Multiple dots in parsed string%s\n", FG_RED, RESET);
                 return false;
             }
         } else
@@ -725,18 +767,18 @@ bool parse_digits(char *db, double *out) {
 // returns true on success, false on failure
 bool perform_token2(struct MathToken *tokens, int *size, int oper_idx, double (*f)(double, double)) {
     if (oper_idx == 0 || oper_idx == *size - 1) {
-        fprintf(stderr, "Error #1: missing operand\n");
+        fprintf(stderr, "%sError #1: missing operand%s\n", FG_RED, RESET);
         return false;
     }
     struct MathToken *lop = &tokens[oper_idx - 1]; // left operand
     struct MathToken *rop = &tokens[oper_idx + 1]; // right operand
     if (lop->nesting_level != tokens[oper_idx].nesting_level ||
             rop->nesting_level != tokens[oper_idx].nesting_level) {
-        fprintf(stderr, "Error #2: wrong nesting level of operands\n");
+        fprintf(stderr, "%sError #2: wrong nesting level of operands%s\n", FG_RED, RESET);
         return false;
     }
     if (lop->operation != '\0' || rop->operation != '\0') {
-        fprintf(stderr, "Error #3: wrong operands\n");
+        fprintf(stderr, "%sError #3: wrong operands%s\n", FG_RED, RESET);
         return false;
     }
     // replace tokens oper_idx-1, oper_idx, oper_idx+1 with new result token
@@ -761,13 +803,13 @@ bool perform_token2(struct MathToken *tokens, int *size, int oper_idx, double (*
 bool perform_token1(struct MathToken *tokens, int *size, int oper_idx, double (*f)(double)) {
     // make sure there is a token on the right
     if (oper_idx == *size - 1) {
-        fprintf(stderr, "Error #1: missing operand\n");
+        fprintf(stderr, "%sError #1: missing operand%s\n", FG_RED, RESET);
         return false;
     }
     // make sure token on the right is a number with same nesting level
     if (tokens[oper_idx + 1].operation != '\0' ||
         tokens[oper_idx + 1].nesting_level != tokens[oper_idx].nesting_level) {
-        fprintf(stderr, "Error #2: wrong operand\n");
+        fprintf(stderr, "%sError #2: wrong operand%s\n", FG_RED, RESET);
         return false;
     }
     struct MathToken *rop = &tokens[oper_idx + 1]; // right operand
@@ -813,9 +855,10 @@ double op_exponentiation(double a, double b) {
     return pow(a, b);
 }
 
+// TODO: print supported operations
 void cmd_calc(int argc, char **argv) {
     if (argc == 1) {
-        fprintf(stderr, "provide expression, e.g. (2 + 2) * 8\n");
+        fprintf(stderr, "%sprovide expression, e.g. (2 + 2) * 8%s\n", FG_RED, RESET);
         return;
     }
     // merge argv into expression
@@ -847,11 +890,11 @@ void cmd_calc(int argc, char **argv) {
                 expression[i] != '(' &&
                 expression[i] != ')' &&
                 expression[i] != '.') {
-            fprintf(stderr, "invalid character %c\n", expression[i]);
+            fprintf(stderr, "%sinvalid character %c\n", FG_RED, expression[i]);
             fprintf(stderr, "%s\n", expression);
             for(int j = 0; j < i; j++)
                 fprintf(stderr, " ");
-            fprintf(stderr, "^\n");
+            fprintf(stderr, "^%s\n", RESET);
             return;
         }
     }
@@ -863,16 +906,16 @@ void cmd_calc(int argc, char **argv) {
         if (expression[i] == ')')
             open_count--;
         if (open_count < 0) {
-            fprintf(stderr, "missing opening bracket\n");
+            fprintf(stderr, "%smissing opening bracket\n", FG_RED);
             fprintf(stderr, "%s\n", expression);
             for (int j = 0; j < i; j++)
                 fprintf(stderr, " ");
-            fprintf(stderr, "^\n");
+            fprintf(stderr, "^%s\n", RESET);
             return;
         }
     }
     if (open_count > 0) {
-        fprintf(stderr, "missing closing bracket\n");
+        fprintf(stderr, "%sError: missing closing bracket%s\n", FG_RED, RESET);
         return;
     }
     printf("%s = ?\n", expression);
@@ -891,7 +934,7 @@ void cmd_calc(int argc, char **argv) {
                 double num = 0;
                 bool succ = parse_digits(digits_buffer, &num);
                 if (!succ) {
-                    fprintf(stderr, "couldn't parse %s\n", digits_buffer);
+                    fprintf(stderr, "%sError: couldn't parse %s%s\n", digits_buffer, FG_RED, RESET);
                     return;
                 }
                 memset(digits_buffer, 0, 1000);
@@ -910,7 +953,7 @@ void cmd_calc(int argc, char **argv) {
         double num = 0;
         bool succ = parse_digits(digits_buffer, &num);
         if (!succ) {
-            fprintf(stderr, "couldn't parse %s\n", digits_buffer);
+            fprintf(stderr, "%sError: couldn't parse %s%s\n", digits_buffer, FG_RED, RESET);
             return;
         }
         memset(digits_buffer, 0, 1000);
@@ -935,7 +978,7 @@ void cmd_calc(int argc, char **argv) {
 
         }
         if (oper_idx == -1) {
-            fprintf(stderr, "Error: no operations\n");
+            fprintf(stderr, "%sError: no operations%s\n", FG_RED, RESET);
             return;
         }
         // perform operation
@@ -968,13 +1011,13 @@ void cmd_calc(int argc, char **argv) {
             }
         }
         if (!succ) {
-            fprintf(stderr, "Error: operation failed\n");
+            fprintf(stderr, "%sError: operation failed%s\n", FG_RED, RESET);
             return;
         }
         printf("\n");
     }
     // print results
-    printf("%f\n", tokens[0].value);
+    printf("%s%f%s\n", FG_GREEN, tokens[0].value, RESET);
 }
 
 int main() {
