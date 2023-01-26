@@ -23,11 +23,10 @@
 #define BACKSPACE 127
 #define DELETE 51
 
+// flushing after every printf (for debugging)
 #define FLUSH 0
 #if FLUSH == 1
-#define fflush(stdout); fflush(stdout);
-#else
-#define fflush(stdout);
+#define printf(...); printf(__VA_ARGS__);fflush(stdout);
 #endif
 
 // Terminal manipulation is done with escape codes:
@@ -213,6 +212,7 @@ void ccreset_cursor() {
     ccmove_cursor(-ccget_x(), -ccget_y());
 }
 
+// useful insight: https://en.wikibooks.org/wiki/Serial_Programming/termios
 char getchar_unbuffered() {
     // terminal config
     struct termios config;
