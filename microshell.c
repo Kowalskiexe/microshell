@@ -511,7 +511,7 @@ void cmd_help() {
     printf("%sbajery:%s\n", BOLD, RESET);
     printf("* pełna obsługa strzałek\n");
     printf("* historia poleceń\n");
-    printf("* obsługa argumentów w nawiasach\n");
+    printf("* obsługa argumentów w cudzysłowach\n");
     printf("* kolorowanie terminala\n");
 }
 
